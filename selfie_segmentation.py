@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import cv2
+import numpy as np
+import mediapipe as mp
+
+# =========================================
+# 🧩 Mediapipe Selfie Segmentation 초기화
+# =========================================
+mp_selfie = mp.solutions.selfie_segmentation
+segmenter = mp_selfie.SelfieSegmentation(model_selection=1)
+
+# =========================================
+# 📸 카메라 또는 동영상 연결
+# =========================================
+# cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture("face.mp4")  # 파일로 테스트 시
+
+print("📷 Selfie Segmentation 시작 — ESC를 눌러 종료합니다.")
+
+# =========================================
+# 🎞️ 실시간 배경 분리 루프
+# =========================================
+while cap.isOpened():
+    success, frame = cap.read()
+    if not success:
+        print("⚠️ 영상이 끝났거나 프레임을 읽지 못했습니다.")
+        break
+
+    # 좌우 반전 (셀카 모드)
+    frame = cv2.flip(frame, 1)
+
+    # BGR → RGB 변환
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # 배경 분리 수행
+    result = segmenter.process(rgb)
+
+    # segmentation mask 생성
+    mask = (result.segmentation_mask > 0.5).astype(np.uint8)
+
+    # ========================================================
+    # 🌟 [수정 포인트] 배경 블러 생성
+    # 커널 크기를 (31, 31)에서 (99, 99)로 늘려 배경을 더 흐리게 만듭니다.
+    # ⚠️ 주의: 두 값은 모두 '홀수'여야 합니다. (예: 65, 99, 151 등)
+    # ========================================================
+    blur = cv2.GaussianBlur(frame, (99, 99), 0)
+
+    # 전경/배경 합성
+    output = frame * mask[..., None] + blur * (1 - mask[..., None])
+    output = output.astype(np.uint8)
+
+    # 화면에 맞게 크기 조정 (세로 영상이 화면보다 커서 창이 잘리는 것 방지)
+    h, w = output.shape[:2]
+    if h > 720:
+        output = cv2.resize(output, (int(w * 720 / h), 720))
+
+    # 결과 화면 표시
+    cv2.imshow("🪞 Selfie Segmentation (ESC to quit)", output)
+
+    # ESC 키로 종료
+    if cv2.waitKey(1) & 0xFF == 27:
+        print("👋 종료합니다.")
+        break
+
+# =========================================
+# 🔚 종료 처리
+# =========================================
+cap.release()
+cv2.destroyAllWindows()
+
